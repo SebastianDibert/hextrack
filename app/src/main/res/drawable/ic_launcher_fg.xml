@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 108dp adaptive icon foreground: tracker grid with a cursor row and a waveform -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FF2E3446" android:pathData="M30,32h10v6h-10z M44,32h8v6h-8z M56,32h22v6h-22z" />
+    <path android:fillColor="#FF3BE8C4" android:pathData="M28,42h52v8h-52z" />
+    <path android:fillColor="#FF0B0D14" android:pathData="M30,44h10v4h-10z M44,44h8v4h-8z M56,44h22v4h-22z" />
+    <path android:fillColor="#FF2E3446" android:pathData="M30,54h10v6h-10z M44,54h8v6h-8z M56,54h22v6h-22z" />
+    <path android:fillColor="#00000000" android:strokeColor="#FFFF5C8A" android:strokeWidth="3"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M30,72 L36,66 L42,78 L48,62 L54,76 L60,68 L66,74 L72,70 L78,72" />
+</vector>
