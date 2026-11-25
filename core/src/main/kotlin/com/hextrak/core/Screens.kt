@@ -169,6 +169,7 @@ class SongScreen(app: Tracker) : GridScreen(app) {
                 val fg = if (c < 0) Pal.FAINT else if (isPlay) Pal.ACCENT2 else Pal.TEXT
                 drawCell(g, 4 + t * 3, y, if (c < 0) "--" else HEX2[c], t, r, fg, if (isPlay) Pal.PLAY_BG else 0)
             }
+            if (app.playing && app.st[K.ST_GLOBAL + 5] == r) rowPlay = true
             g.text(1, y, HEX2[r], if (r == cy) Pal.ACCENT else if (r % 4 == 0) Pal.TEXT else Pal.DIM)
             if (rowPlay) g.text(0, y, ">", Pal.ACCENT2)
         }
@@ -779,7 +780,7 @@ class ProjectScreen(app: Tracker) : ParamScreen(app) {
                 if (f <= 0) "-" else "$f %.1fms".format(f * 1000f / app.audio.sampleRate())
             },
             InfoItem("CPU") { "${(app.meters[K.TRACKS * 3 + 2] * 100).toInt()}%" },
-            InfoItem("VERSION") { "1.0" },
+            InfoItem("VERSION") { "1.0.1" },
         )
         return listOf(a, b)
     }
@@ -1045,8 +1046,11 @@ class HelpScreen(app: Tracker) : Screen(app) {
         h("PLAYBACK")
         t("START on SONG plays from the cursor row.")
         t("START on CHAIN / PHRASE loops it on the")
-        t("current track. Tracks loop back to the")
-        t("top of their block at an empty song row.")
+        t("current track. Song rows play together:")
+        t("a row lasts as long as its longest chain")
+        t("(shorter chains repeat). Empty cells are")
+        t("silent; a fully empty row loops back to")
+        t("the top of that block.")
         t("")
         h("PHRASE FX COMMANDS")
         for (i in 1 until K.NUM_FX) t(Defs.FX_HELP[i].take(40))

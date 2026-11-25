@@ -228,16 +228,35 @@ struct Compressor {
 };
 
 // ------------------------------------------------------------ Sidechain ducker
+// Onset-triggered "pump": each hit on the key retriggers a duck envelope (attack -> release),
+// so long kick tails do not keep the destination pinned down.
 struct Ducker {
-    float env = 0, gain = 1;
+    float fast = 0, slow = 0, e = 0, target = 0, gain = 1;
+    bool armed = true, attacking = false;
     void process(float* L, float* R, int n, const float* key, int depth, int atk, int rel, float sr) {
         float d = depth / 255.f;
-        float aC = 1.f - expCoef(0.0002f + atk / 255.f * 0.05f, sr);
-        float rC = 1.f - expCoef(0.01f + rel / 255.f * rel / 255.f * 1.2f, sr);
+        float cf = expCoef(0.003f, sr);
+        float cs = 1.f - expCoef(0.04f, sr);
+        float aC = 1.f - expCoef(0.0005f + atk / 255.f * 0.05f, sr);
+        float rC = expCoef(0.01f + rel / 255.f * rel / 255.f * 1.2f, sr);
         for (int i = 0; i < n; i++) {
             float k = fabsf(key[i]);
-            env += (k - env) * (k > env ? aC : rC);
-            gain = 1.f - d * std::min(1.f, env * 2.5f);
+            fast = std::max(k, fast * cf);
+            slow += (fast - slow) * cs;
+            if (armed && fast > 0.02f && fast > slow * 1.5f + 0.01f) {
+                armed = false;
+                attacking = true;
+                target = std::max(e, std::min(1.f, fast * 2.5f));
+            } else if (!armed && fast < slow * 1.1f) {
+                armed = true;
+            }
+            if (attacking) {
+                e += (target - e) * aC;
+                if (e >= target * 0.98f) attacking = false;
+            } else {
+                e *= rC;
+            }
+            gain = 1.f - d * e;
             L[i] *= gain; R[i] *= gain;
         }
     }

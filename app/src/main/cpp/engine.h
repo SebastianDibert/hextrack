@@ -87,7 +87,10 @@ private:
     void stopPlay();
     void advance(int t);
     void loadChainStep(int t);
-    void nextSongRow(int t);
+    void startRow(int r);
+    void nextGlobalRow();
+    bool rowEmpty(int r) const;
+    int chainLen(int c) const;
     void startStep(int t);
     void tickFx(int t);
     void trigger(int t, const PhraseStep& st, bool slide, bool acc, int slideV);
@@ -105,6 +108,8 @@ private:
     int playMode = PLAY_SONG, tick = 0;
     long stepCount = 0;
     double samplesToTick = 0;
+    int songRowG = 0, rowStep = 0, rowLen = 16;
+    bool songWrapped = false;
     float tempo = 120.f;
     int lastGTempo = -1;
 

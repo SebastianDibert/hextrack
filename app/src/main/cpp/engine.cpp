@@ -112,15 +112,10 @@ void Engine::startPlay(int mode, int track, int idx, int row) {
     playMode = mode; tick = 0; stepCount = 0; firstStep = true; samplesToTick = 0;
     lastGTempo = gparams[G_TEMPO];
     tempo = clampf((float)lastGTempo, 20.f, 400.f);
+    songWrapped = false;
     if (mode == PLAY_SONG) {
-        row = std::max(0, std::min(SONG_ROWS - 1, row));
-        for (int t = 0; t < NUM_TRACKS; t++) {
-            TrackState& T = tracks[t];
-            T.songRow = row;
-            T.chain = song[row][t];
-            if (T.chain >= 0) { T.active = true; T.chainStep = 0; loadChainStep(t); }
-            else T.wrapped = true;
-        }
+        songRowG = std::max(0, std::min(SONG_ROWS - 1, row));
+        startRow(songRowG);
     } else if (track >= 0 && track < NUM_TRACKS) {
         TrackState& T = tracks[track];
         if (mode == PLAY_CHAIN && idx >= 0 && idx < NUM_CHAINS) {
@@ -159,17 +154,55 @@ void Engine::loadChainStep(int t) {
     T.phraseStep = 0;
 }
 
-void Engine::nextSongRow(int t) {
-    TrackState& T = tracks[t];
-    int r = T.songRow + 1;
-    if (r >= SONG_ROWS || song[r][t] < 0) {
-        r = T.songRow;
-        while (r > 0 && song[r - 1][t] >= 0) r--;
-        T.wrapped = true;
+// ---- song mode: all tracks move through the song rows together.
+// A row lasts as long as its longest chain; shorter chains loop until the row ends.
+// Tracks with an empty cell are silent for that row and join when a later row has a chain.
+// At a row where every track is empty (or the end of the song) playback returns to the top of that block.
+int Engine::chainLen(int c) const {
+    if (c < 0 || c >= NUM_CHAINS) return 1;
+    int n = 0;
+    while (n < STEPS && chains[c].s[n].phrase >= 0) n++;
+    return std::max(1, n);
+}
+
+bool Engine::rowEmpty(int r) const {
+    for (int t = 0; t < NUM_TRACKS; t++) if (song[r][t] >= 0) return false;
+    return true;
+}
+
+void Engine::startRow(int r) {
+    int len = 1;
+    for (int t = 0; t < NUM_TRACKS; t++) {
+        TrackState& T = tracks[t];
+        int c = song[r][t];
+        T.songRow = r;
+        T.hopTo = -1;
+        if (c >= 0) {
+            T.active = true;
+            T.chain = c;
+            T.chainStep = 0;
+            loadChainStep(t);
+            len = std::max(len, chainLen(c));
+        } else {
+            if (T.active) releaseTrack(t);
+            T.active = false;
+            T.chain = -1;
+            T.phrase = -1;
+        }
     }
-    T.songRow = r;
-    T.chain = song[r][t];
-    if (T.chain < 0) { T.active = false; T.wrapped = true; }
+    rowLen = len * STEPS;
+    rowStep = 0;
+}
+
+void Engine::nextGlobalRow() {
+    int r = songRowG + 1;
+    if (r >= SONG_ROWS || rowEmpty(r)) {
+        r = songRowG;
+        while (r > 0 && !rowEmpty(r - 1)) r--;
+        songWrapped = true;
+    }
+    songRowG = r;
+    startRow(r);
 }
 
 void Engine::advance(int t) {
@@ -185,14 +218,7 @@ void Engine::advance(int t) {
         if (playMode == PLAY_PHRASE) { T.phraseStep = 0; return; }
     }
     T.chainStep++;
-    if (T.chainStep >= STEPS || T.chain < 0 || chains[T.chain].s[T.chainStep].phrase < 0) {
-        if (playMode == PLAY_CHAIN) T.chainStep = 0;
-        else {
-            nextSongRow(t);
-            if (!T.active) { releaseTrack(t); return; }
-            T.chainStep = 0;
-        }
-    }
+    if (T.chainStep >= STEPS || T.chain < 0 || chains[T.chain].s[T.chainStep].phrase < 0) T.chainStep = 0;
     loadChainStep(t);
 }
 
@@ -338,14 +364,12 @@ void Engine::doTick() {
             lastGTempo = gparams[G_TEMPO];
             tempo = clampf((float)lastGTempo, 20.f, 400.f);
         }
-        if (!firstStep)
-            for (int t = 0; t < NUM_TRACKS; t++) if (tracks[t].active) advance(t);
-        firstStep = false;
-        if (offline && playMode == PLAY_SONG) {
-            bool all = true;
-            for (int t = 0; t < NUM_TRACKS; t++) if (!tracks[t].wrapped && tracks[t].active) all = false;
-            if (all) { stopPlay(); return; }
+        if (!firstStep) {
+            if (playMode == PLAY_SONG && ++rowStep >= rowLen) nextGlobalRow();
+            else for (int t = 0; t < NUM_TRACKS; t++) if (tracks[t].active) advance(t);
         }
+        firstStep = false;
+        if (offline && playMode == PLAY_SONG && songWrapped) { stopPlay(); return; }
         for (int t = 0; t < NUM_TRACKS; t++) if (tracks[t].active) startStep(t);
     }
     for (int t = 0; t < NUM_TRACKS; t++) tickFx(t);
@@ -359,7 +383,7 @@ void Engine::resetDsp() {
         for (auto& v : T.voices) v.kill();
         T.ins.reset();
         T.eq.lo.reset(); T.eq.mid.reset(); T.eq.hi.reset();
-        T.comp.env = 0; T.duck.env = 0; T.duck.gain = 1;
+        T.comp.env = 0; T.duck = Ducker();
         T.lim = Limiter();
         T.peakL = T.peakR = 0;
     }
@@ -526,6 +550,7 @@ void Engine::exportState() {
     state[ST_GLOBAL + 2].store((int)(tempo * 10.f), std::memory_order_relaxed);
     state[ST_GLOBAL + 3].store((int)(cpuLoad.load() * 1000.f), std::memory_order_relaxed);
     state[ST_GLOBAL + 4].store((int)(stepCount & 0x7fffffff), std::memory_order_relaxed);
+    state[ST_GLOBAL + 5].store(playing && playMode == PLAY_SONG ? songRowG : -1, std::memory_order_relaxed);
     meters[NUM_TRACKS * 3 + 0].store(masterPeakL, std::memory_order_relaxed);
     meters[NUM_TRACKS * 3 + 1].store(masterPeakR, std::memory_order_relaxed);
     meters[NUM_TRACKS * 3 + 2].store(cpuLoad.load(), std::memory_order_relaxed);

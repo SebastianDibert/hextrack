@@ -119,7 +119,7 @@ object Demo {
         Presets.byName("CLHAT").applyTo(ins[2])
         Presets.byName("OPHAT").applyTo(ins[3])
         Presets.byName("ACID").applyTo(ins[4])
-        Presets.byName("PAD").applyTo(ins[5]); ins[5].p[K.I_VOL] = 0x98
+        Presets.byName("PAD").applyTo(ins[5]); ins[5].p[K.I_VOL] = 0xB8
         Presets.byName("GUITAR").applyTo(ins[6]); ins[6].name = "PLUCK"
         Presets.byName("BELL").applyTo(ins[7])
         Presets.byName("RIM").applyTo(ins[8])
@@ -191,7 +191,7 @@ object Demo {
 
         // mixer
         val tr = song.tracks
-        val vols = intArrayOf(0xC8, 0xA8, 0x90, 0xA8, 0x90, 0x88, 0x98, 0x98)
+        val vols = intArrayOf(0xC8, 0xA8, 0x90, 0xA8, 0xB8, 0xB0, 0xB0, 0x98)
         for (t in 0 until K.TRACKS) tr[t][K.T_VOL] = vols[t]
         tr[0][K.T_EQ_LG] = 3; tr[0][K.T_EQ_LF] = 0x40
         tr[1][K.T_SEND_REV] = 0x60; tr[1][K.T_SEND_DLY] = 0x38
